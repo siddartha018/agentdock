@@ -1,0 +1,5 @@
+{"id": "one-word", "as": "E100", "input": "hello", "expect": {"contains": ["counted 1 words"]}}
+{"id": "three-words", "as": "E100", "input": "one two three", "expect": {"contains": ["counted 3 words"]}}
+{"id": "manager", "as": "M200", "input": "a b", "expect": {"contains": ["counted 2 words"]}}
+{"id": "hr", "as": "H300", "input": "x", "expect": {"contains": ["counted 1 words"]}}
+{"id": "pii-redacted", "as": "E100", "input": "call 415-555-0134", "expect": {"contains": ["counted"], "not_contains": ["415-555-0134"]}}

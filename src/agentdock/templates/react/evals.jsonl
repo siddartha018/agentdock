@@ -1,0 +1,5 @@
+{"id": "hello", "as": "E100", "input": "hi", "expect": {"contains": ["Hello from __NAME__"]}}
+{"id": "whoami-employee", "as": "E100", "input": "who am I?", "expect": {"contains": ["E100 (employee)"], "tools": ["whoami"]}}
+{"id": "whoami-manager", "as": "M200", "input": "who am I?", "expect": {"contains": ["M200 (manager)"]}}
+{"id": "whoami-hr", "as": "H300", "input": "who am I?", "expect": {"contains": ["H300"]}}
+{"id": "no-pii-echo", "as": "E100", "input": "who am I? my ssn is 999-11-2222", "expect": {"not_contains": ["999-11-2222"]}}
