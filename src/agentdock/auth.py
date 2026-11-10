@@ -57,8 +57,16 @@ async def authenticate(headers: dict) -> Auth.types.MinimalUserDict:
 
 
 @auth.on.threads
-async def own_threads(ctx: Auth.types.AuthContext, value: dict) -> dict:
-    """Stamp new threads with their owner and only ever show a caller their own."""
+async def own_threads(ctx: Auth.types.AuthContext, value: dict) -> dict | bool:
+    """Stamp new threads with their owner and only ever show a caller their own.
+
+    The one exception is the retention sweeper, which may search and delete any
+    thread and nothing else.
+    """
+    if "retention" in (getattr(ctx.user, "permissions", None) or ()):
+        if ctx.action in ("search", "delete"):
+            return True
+        raise Auth.exceptions.HTTPException(status_code=403, detail="svc-retention may only search and delete")
     if ctx.action == "create" or "metadata" in value:
         # Mutate the server's dict in place: it keeps its own reference, so
         # replacing an empty {} with a new dict would silently drop the owner.

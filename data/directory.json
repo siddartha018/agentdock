@@ -1,12 +1,59 @@
 {
   "_note": "Fake people for the demo. No real data.",
   "users": {
-    "E100": {"name": "Asha Rao", "role": "employee", "team": "payments", "manager": "M200"},
-    "E101": {"name": "Ben Ortiz", "role": "employee", "team": "payments", "manager": "M200"},
-    "E102": {"name": "Chen Li", "role": "employee", "team": "search", "manager": "M201"},
-    "M200": {"name": "Dana Kim", "role": "manager", "team": "payments", "manager": null},
-    "M201": {"name": "Eli Park", "role": "manager", "team": "search", "manager": null},
-    "H300": {"name": "Farah Ali", "role": "hr", "team": "people", "manager": null},
-    "svc-concierge": {"name": "Concierge service", "role": "service", "team": "platform", "manager": null, "scopes": ["delegate"]}
+    "E100": {
+      "name": "Asha Rao",
+      "role": "employee",
+      "team": "payments",
+      "manager": "M200"
+    },
+    "E101": {
+      "name": "Ben Ortiz",
+      "role": "employee",
+      "team": "payments",
+      "manager": "M200"
+    },
+    "E102": {
+      "name": "Chen Li",
+      "role": "employee",
+      "team": "search",
+      "manager": "M201"
+    },
+    "M200": {
+      "name": "Dana Kim",
+      "role": "manager",
+      "team": "payments",
+      "manager": null
+    },
+    "M201": {
+      "name": "Eli Park",
+      "role": "manager",
+      "team": "search",
+      "manager": null
+    },
+    "H300": {
+      "name": "Farah Ali",
+      "role": "hr",
+      "team": "people",
+      "manager": null
+    },
+    "svc-concierge": {
+      "name": "Concierge service",
+      "role": "service",
+      "team": "platform",
+      "manager": null,
+      "scopes": [
+        "delegate"
+      ]
+    },
+    "svc-retention": {
+      "name": "Retention sweeper",
+      "role": "service",
+      "team": "platform",
+      "manager": null,
+      "scopes": [
+        "retention"
+      ]
+    }
   }
 }

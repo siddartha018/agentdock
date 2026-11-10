@@ -7,7 +7,7 @@
   "graphs": {
     "concierge": {
       "path": "./src/agentdock/entry.py:concierge",
-      "description": "Front door for employee questions. Works out which specialist agent should answer (HR policy and leave balances, or expense checks) and asks it over A2A on the employee's behalf."
+      "description": "Front door for employee questions. Works out which specialist agent should answer (HR policy and leave balances, or expense checks) and asks it over A2A on behalf of the employee."
     },
     "expense_check": {
       "path": "./src/agentdock/entry.py:expense_check",
@@ -20,6 +20,9 @@
   },
   "auth": {
     "path": "./src/agentdock/auth.py:auth"
+  },
+  "http": {
+    "app": "./src/agentdock/http_app.py:app"
   },
   "env": ".env",
   "checkpointer": {
