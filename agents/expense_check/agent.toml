@@ -1,0 +1,9 @@
+name = "expense_check"
+description = "Checks one expense against the travel and expense policy and returns a decision: approve, approve a capped amount, needs a receipt, needs manager approval, or reject. Deterministic rules, no LLM."
+owner_team = "finance-systems"
+kind = "workflow"
+allowed_roles = ["employee", "manager"]
+
+[gate]
+min_pass_rate = 1.0
+min_cases = 8

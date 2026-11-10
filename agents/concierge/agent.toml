@@ -1,0 +1,9 @@
+name = "concierge"
+description = "Front door for employee questions. Works out which specialist agent should answer (HR policy and leave balances, or expense checks) and asks it over A2A on the employee's behalf."
+owner_team = "platform"
+kind = "react"
+allowed_roles = ["employee", "manager", "hr"]
+
+[gate]
+min_pass_rate = 0.9
+min_cases = 6

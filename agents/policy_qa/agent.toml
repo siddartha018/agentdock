@@ -1,0 +1,9 @@
+name = "policy_qa"
+description = "Answers HR policy questions (vacation, sick leave, parental leave, remote work, expenses, holidays) and looks up leave balances. Employees see only their own balance, managers their direct reports, HR everyone."
+owner_team = "people-tech"
+kind = "react"
+allowed_roles = ["employee", "manager", "hr"]
+
+[gate]
+min_pass_rate = 0.9
+min_cases = 8

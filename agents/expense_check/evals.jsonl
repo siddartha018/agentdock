@@ -1,0 +1,9 @@
+{"id": "small-taxi", "as": "E100", "input": "$20 taxi to the airport", "expect": {"contains": ["APPROVE for $20.00"]}}
+{"id": "meal-capped", "as": "E100", "input": "$80 dinner with a client, receipt attached", "expect": {"contains": ["APPROVE CAPPED", "$60.00 is approved"]}}
+{"id": "no-receipt", "as": "E101", "input": "Hotel 200 USD, I lost the receipt", "expect": {"contains": ["NEEDS RECEIPT"]}}
+{"id": "hotel-capped", "as": "E101", "input": "Hotel night $300, receipt attached", "expect": {"contains": ["APPROVE CAPPED", "$250.00 is approved"]}}
+{"id": "alcohol-rejected", "as": "E100", "input": "$30 of wine at the team dinner", "expect": {"contains": ["REJECT"]}}
+{"id": "big-flight-manager", "as": "E101", "input": "Flight to Berlin $1,450 with receipt", "expect": {"contains": ["NEEDS MANAGER", "M200"]}}
+{"id": "missing-amount", "as": "E100", "input": "Can you check my taxi expense?", "expect": {"contains": ["Tell me the amount"]}}
+{"id": "hr-role-blocked", "as": "H300", "input": "$20 taxi", "expect": {"denied": true}}
+{"id": "manager-allowed", "as": "M201", "input": "$45 lunch, receipt attached", "expect": {"contains": ["APPROVE for $45.00"], "denied": false}}
