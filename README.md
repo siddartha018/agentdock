@@ -11,10 +11,11 @@ The idea is from a talk by Workday's agent-platform team: their teams write only
 | What | Result |
 |---|---|
 | `dock new` → gate → live server → answered over MCP **and** A2A | **~2.8 s** (3 clean runs: 2.93, 2.78, 2.77 s; `scripts/time_to_prototype.py`) |
-| End-to-end HTTP checks against a running server | **10/10** (`scripts/demo.py`) |
+| End-to-end HTTP checks against a running server | **10/10** on the dev server and on the production stack (`scripts/demo.py`) |
 | Eval suite, offline scripted model (what CI runs) | **27/27** |
 | Eval suite, real model (Gemini 3.5 Flash-Lite, free tier) on the two LLM agents | **18/18** (`evals/results/gemini-*.json`) |
-| Retention: a conversation past its TTL is deleted on a real server | **deleted in 10 s** with a 6 s TTL (`scripts/check_retention.py`) |
+| Retention: a conversation past its TTL is deleted on a real server | **deleted in 10 s** with a 6 s TTL, dev and production (`scripts/check_retention.py`) |
+| Production stack (Postgres + Redis): a conversation survives an API restart | **yes**, and still 404s for other users |
 | Streaming redactor, 40 random chunkings of a PII-heavy text | **0 raw values released**; output identical to redacting it whole |
 | Unit tests | **104**, ~2 s, no keys, no server |
 
@@ -89,7 +90,7 @@ docker compose up -d                                   # API on :8123
 uv run python scripts/demo.py --url http://127.0.0.1:8123
 ```
 
-The image builds, and the production runtime starts against Postgres and Redis and runs its migrations. The self-hosted server then checks a license at startup, so it needs `LANGSMITH_API_KEY` from a free LangSmith account (or a `LANGGRAPH_CLOUD_LICENSE_KEY`) in `.env`. Without one it exits with "License verification failed".
+The self-hosted server checks a license at startup, so it needs `LANGSMITH_API_KEY` from a free LangSmith account (or a `LANGGRAPH_CLOUD_LICENSE_KEY`) in `.env`; without one it exits with "License verification failed". With the key, the same checks pass against it: 10/10 HTTP checks, retention, redacted streaming with `stream_subgraphs`, and threads persisting across an API restart.
 
 Dev API keys are `dk_dev_<identity>`: `dk_dev_e100` (employee), `dk_dev_m200` (manager), `dk_dev_h300` (HR), and so on, for the fake people in `data/directory.json`. Only their SHA-256 hashes are stored (`config/dev_keys.json`). Point `AGENTDOCK_KEYS_FILE` at your own table for anything real.
 
@@ -132,7 +133,7 @@ All data is fake.
 
 ## Limits (not hidden)
 
-- **Production server not run end to end yet.** It's blocked only on the free LangSmith key above. Everything before the license check works: the image build, Postgres, Redis and migrations.
+- **Production stack tested locally in Docker, not on a cloud host.** It's the same image `langgraph build` makes for any host, but a cloud deployment is untested.
 - **NER is the small spaCy model.** It catches names the patterns miss, but it sometimes gives an entity the wrong label (it called "Bangalore" a person, which still gets redacted). Use a larger model for higher accuracy.
 - **NER streaming waits for sentence ends**, so a short answer with no sentence break arrives in one piece. The pattern engine streams word by word.
 - **The offline policies are scripted**, so a green offline gate proves the plumbing, auth and rules, not model quality. That's what the real-model run is for.
