@@ -143,3 +143,38 @@ async def test_tool_call_args_scrubbed_in_state():
     for m in msgs:
         for tc in getattr(m, "tool_calls", []) or []:
             assert "111-22-3333" not in str(tc["args"]) and "01/02/1990" not in str(tc["args"])
+
+
+async def test_real_model_failure_falls_back_to_offline_policy(monkeypatch):
+    """A public demo must degrade, not error, when the free tier is rate-limited."""
+    from langchain_core.language_models import BaseChatModel
+
+    from agentdock import models
+
+    class Broken(BaseChatModel):
+        """Fails on every path, like a rate-limited provider."""
+
+        @property
+        def _llm_type(self):
+            return "broken"
+
+        def _generate(self, *a, **k):
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+        def _stream(self, *a, **k):
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+
+        def bind_tools(self, tools, **kw):
+            return self
+
+    monkeypatch.setenv("AGENTDOCK_MODEL", "gemini:test")
+    monkeypatch.setenv("AGENTDOCK_FALLBACK", "offline")
+    monkeypatch.setattr(models, "_real_model", lambda *a, **k: Broken())
+    from agentdock.platform import wrap
+    from agentdock.registry import discover, import_agent_module
+
+    m = next(x for x in discover() if x.name == "policy_qa")
+    g = wrap(m, import_agent_module(m).build())
+    out = await g.ainvoke({"messages": [HumanMessage("How many vacation days do I have left?")]}, run_config_for("E100"))
+    assert "12 vacation days" in out["messages"][-1].content
+    assert models.model_used(out["messages"][-1]) == "offline"

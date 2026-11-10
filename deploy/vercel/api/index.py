@@ -2,12 +2,16 @@
 
 The Agent Server is a long-running process with background workers, which a
 serverless function can't host. This app runs the *same* platform code per
-request (auth.resolve -> platform wrapper -> audit) on the offline model, and
-exposes small MCP and A2A endpoints. The full Agent Server version is `dock serve`.
+request (auth.resolve -> platform wrapper -> audit) and exposes small MCP and A2A
+endpoints. Live requests use a real model (AGENTDOCK_MODEL, e.g. Gemini) with the
+offline policy as a fallback when the free tier is rate-limited; the eval gate
+always uses the offline model so its result is reproducible. The full Agent
+Server version is `dock serve` / the Docker stack.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import time
@@ -20,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 os.environ.setdefault("AGENTDOCK_AUDIT_LOG", "/tmp/agentdock-audit.jsonl")
 os.environ.setdefault("AGENTDOCK_MODEL", "offline")
+os.environ.setdefault("AGENTDOCK_FALLBACK", "offline")
 os.environ.setdefault("AGENTDOCK_PII_ENGINE", "patterns")
 
 from fastapi import FastAPI, Request  # noqa: E402
@@ -29,14 +34,32 @@ from langgraph_sdk import Auth  # noqa: E402
 
 from agentdock import audit  # noqa: E402
 from agentdock.auth import resolve  # noqa: E402
-from agentdock.entry import AGENTS  # noqa: E402
+from agentdock import entry  # noqa: E402
 from agentdock.evals import gate, load_baseline, run_agent  # noqa: E402
 from agentdock.identity import directory  # noqa: E402
 from agentdock.messages import text_of  # noqa: E402
-from agentdock.registry import discover  # noqa: E402
+from agentdock.models import model_used  # noqa: E402
+from agentdock.platform import wrap  # noqa: E402
+from agentdock.registry import discover, import_agent_module  # noqa: E402
 
 app = FastAPI(title="agentdock serverless", docs_url=None, redoc_url=None, openapi_url=None)
 MANIFESTS = {m.name: m for m in discover()}
+LIVE = dict(entry.AGENTS)  # built with AGENTDOCK_MODEL (the real model)
+AGENTS = LIVE
+CONFIGURED = os.environ["AGENTDOCK_MODEL"]
+
+
+def _offline_agents() -> dict[str, Any]:
+    prev = os.environ["AGENTDOCK_MODEL"]
+    os.environ["AGENTDOCK_MODEL"] = "offline"  # chat_model() reads this at build time
+    try:
+        return {m.name: wrap(m, import_agent_module(m).build()) for m in MANIFESTS.values()}
+    finally:
+        os.environ["AGENTDOCK_MODEL"] = prev
+
+
+OFFLINE = LIVE if CONFIGURED == "offline" else _offline_agents()
+_gate_lock = asyncio.Lock()
 MAX_INPUT = 600
 SAMPLES = {
     "policy_qa": [
@@ -59,7 +82,8 @@ SAMPLES = {
 
 # --- per-IP limits: the demo is public and runs on a free plan ---------------
 _hits: dict[str, deque[float]] = defaultdict(deque)
-LIMITS = {"run": (30, 60.0), "gate": (6, 60.0), "mcp": (60, 60.0)}
+# Live runs share one free model quota, so they're limited harder than the offline gate.
+LIMITS = {"run": (8, 60.0), "gate": (6, 60.0), "mcp": (20, 60.0)}
 
 
 def _limited(request: Request, kind: str) -> bool:
@@ -108,7 +132,10 @@ async def run_once(agent: str, message: str, user: dict[str, Any]) -> dict[str, 
             final = data
     records = audit.read()[mark:]
     msgs = (final or {}).get("messages", [])
+    ai = [m for m in msgs if isinstance(m, AIMessage)]
     return {
+        "model": model_used(ai[-1]) if ai else "none",
+        "configured_model": CONFIGURED,
         "agent": agent,
         "caller": {k: user.get(k) for k in ("identity", "role", "team", "via")},
         "answer": text_of(msgs[-1]) if msgs else "",
@@ -132,7 +159,7 @@ async def meta() -> dict[str, Any]:
          "stream": m.stream, "owner": m.owner_team, "samples": SAMPLES.get(m.name, [])}
         for m in MANIFESTS.values()
     ]
-    return {"agents": agents, "people": people, "model": os.environ["AGENTDOCK_MODEL"],
+    return {"agents": agents, "people": people, "model": CONFIGURED,
             "pii_engine": os.environ["AGENTDOCK_PII_ENGINE"]}
 
 
@@ -158,7 +185,14 @@ async def api_gate(request: Request) -> Response:
     if _limited(request, "gate"):
         return JSONResponse({"error": "Too many requests, wait a minute."}, status_code=429)
     started = time.perf_counter()
-    reports = [await run_agent(m, AGENTS[n]) for n, m in MANIFESTS.items()]
+    # The gate is deterministic: offline model, and A2A loopback pointed at the
+    # offline agents too, so 27 cases never spend the live model's quota.
+    async with _gate_lock:
+        entry.AGENTS.update(OFFLINE)
+        try:
+            reports = [await run_agent(m, OFFLINE[n]) for n, m in MANIFESTS.items()]
+        finally:
+            entry.AGENTS.update(LIVE)
     problems = gate(reports, load_baseline(), MANIFESTS)
     return JSONResponse({
         "green": not problems,

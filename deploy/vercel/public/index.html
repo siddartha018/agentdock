@@ -38,7 +38,7 @@
           <a class="key key--primary" href="#playground">Send a request</a>
           <a class="key" href="https://github.com/siddartha018/agentdock#readme">Read how it works</a>
         </div>
-        <p class="hero__note">Every request below runs the real platform code. The data is fake.</p>
+        <p class="hero__note" id="model-note">Every request below runs the real platform code. The data is fake.</p>
       </div>
       <div class="field" aria-hidden="true">
         <div class="field__still"></div>
@@ -121,7 +121,7 @@
       <div class="gatebar">
         <button class="key key--primary" type="button" id="run-gate">Run the gate now</button>
         <span class="gatebar__result" id="gate-result"></span>
-        <span class="gatebar__sub" id="gate-sub">27 cases across 3 agents, offline model</span>
+        <span class="gatebar__sub" id="gate-sub">27 cases across 3 agents, on the deterministic offline model</span>
       </div>
       <table>
         <thead><tr><th scope="col">Agent</th><th scope="col">Cases</th><th scope="col" class="num">Passed</th><th scope="col" class="num hide-sm">Floor</th></tr></thead>
@@ -152,7 +152,7 @@
           <div class="cmd"><pre id="cmd-a2a">curl -s https://example.com/a2a/expense_check -H "x-api-key: dk_dev_e100" -H "content-type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","messageId":"m1","parts":[{"kind":"text","text":"$80 dinner, receipt attached"}]}}}'</pre><button class="key key--sm" type="button" data-copy="cmd-a2a">Copy</button></div>
         </div>
       </div>
-      <p class="honest">This deployment runs the platform code per request on a serverless function, with the free offline model. The full version runs on LangGraph Agent Server with <code>dock serve</code>, with token streaming, a retention sweeper and real models.</p>
+      <p class="honest">This deployment runs the platform code per request on a serverless function, with Gemini 3.5 Flash-Lite on its free tier. When that tier is busy, answers fall back to the offline model and say so. The full version runs on LangGraph Agent Server with Postgres and Redis, with a retention sweeper.</p>
     </div>
   </section>
 
@@ -281,8 +281,10 @@
       $("#audit-hash").textContent = rec.hash ? `sha256 ${rec.hash.slice(0, 16)}` : "";
       await play(d.deltas);
       $("#answer").innerHTML = mark(d.answer);
-      const streamed = d.deltas.length ? `${d.deltas.length} redacted stream chunks` : "not streamed (workflow agent)";
-      $("#answer-meta").textContent = `${d.ms} ms on the server, ${streamed}, model: offline`;
+      const streamed = d.deltas.length ? `${d.deltas.length} redacted stream chunks` : "not streamed";
+      const fell = d.model === "offline" && d.configured_model !== "offline";
+      const model = d.model === "none" ? "no model call (rules only)" : fell ? "offline fallback (the free model tier is busy)" : d.model;
+      $("#answer-meta").textContent = `${d.ms} ms on the server, ${streamed}, model: ${model}`;
     } catch (err) {
       $("#answer").textContent = `Request failed: ${err.message}`;
     } finally {
@@ -314,6 +316,8 @@
       state.meta = await (await fetch("/api/meta")).json();
     } catch { $("#agent-desc").textContent = "Could not reach the API."; return; }
     renderPeople(); renderAgent(); count();
+    const live = state.meta.model.replace(/^gemini:/, "");
+    if (state.meta.model !== "offline") $("#model-note").textContent = `Answers come from ${live}, through the real platform code. The data is fake.`;
     $("#agents").addEventListener("click", (e) => { const b = e.target.closest("[data-agent]"); if (!b) return; state.agent = b.dataset.agent; renderAgent(); $("#msg").value = agent().samples[0] || ""; count(); });
     $("#people").addEventListener("click", (e) => { const b = e.target.closest("[data-person]"); if (!b) return; state.person = b.dataset.person; renderPeople(); });
     $("#samples").addEventListener("click", (e) => { const b = e.target.closest(".sample"); if (!b) return; $("#msg").value = b.textContent; count(); send(); });
