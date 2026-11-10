@@ -1,0 +1,19 @@
+{
+  "_note": "Fake HR records. SSNs and bank numbers are invented so the PII guard has something to catch.",
+  "leave": {
+    "E100": {"vacation_days": 12, "sick_days": 5, "ssn": "123-45-6789", "bank_account": "DE89 3704 0044 0532 0130 00"},
+    "E101": {"vacation_days": 3, "sick_days": 8, "ssn": "234-56-7890", "bank_account": "GB29 NWBK 6016 1331 9268 19"},
+    "E102": {"vacation_days": 20, "sick_days": 1, "ssn": "345-67-8901", "bank_account": "FR14 2004 1010 0505 0001 3M02 606"},
+    "M200": {"vacation_days": 15, "sick_days": 4, "ssn": "456-78-9012", "bank_account": "NL91 ABNA 0417 1643 00"},
+    "M201": {"vacation_days": 9, "sick_days": 6, "ssn": "567-89-0123", "bank_account": "ES91 2100 0418 4502 0005 1332"},
+    "H300": {"vacation_days": 18, "sick_days": 2, "ssn": "678-90-1234", "bank_account": "IT60 X054 2811 1010 0000 0123 456"}
+  },
+  "policies": {
+    "vacation": "Full-time employees accrue 1.5 vacation days per month (18 per year). Up to 5 unused days carry over into the next year; the rest expire on 31 March.",
+    "sick": "Sick leave is 10 days per year. More than 3 consecutive sick days need a doctor's note uploaded within 7 days.",
+    "parental": "Primary caregivers get 16 weeks of paid parental leave; secondary caregivers get 6 weeks. Leave must start within 12 months of the birth or adoption.",
+    "remote": "Employees may work remotely up to 3 days per week. Working from another country for more than 14 days a year needs HR approval.",
+    "expenses": "Meals are reimbursed up to 60 USD per day and hotels up to 250 USD per night. Any single expense over 75 USD needs a receipt. Expenses over 1000 USD need manager approval. Alcohol is never reimbursed.",
+    "holidays": "The company observes 10 public holidays a year, published in the HR portal each December."
+  }
+}

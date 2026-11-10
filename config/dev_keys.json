@@ -1,0 +1,12 @@
+{
+  "_note": "DEV ONLY. Plaintext keys are dk_dev_<identity lowercased>, e.g. dk_dev_e100. Use AGENTDOCK_KEYS_FILE for real keys.",
+  "keys": {
+    "44d747cf193c005e61f77c704e97314d2d0e53e12971ac0fcc39ce3e9aea6b46": "E100",
+    "194694b2c74350a9fedeb9437e09da10df4f2994d8e49e692ba896a96c83ea57": "E101",
+    "87dc3a5ef4c15dd4511a1fbabd9179012e091c0bee3311562a0facab0637ab50": "E102",
+    "cbf39bc99e3373bc4ed23e390b191da03f90d521d9776d50d0516b8047df0e71": "M200",
+    "54ffc7b9f36ec19a5950dc0a86c6d812733f695f7f528cea8cb90dcab859b69a": "M201",
+    "9189a074a5d221f2dd18c088173050991c8fbfff06e49d14b57a6b877ce654c4": "H300",
+    "d90d61799646ba374a7f5edddb468faf3f3af094d553a304a6d42fcb50566499": "svc-concierge"
+  }
+}

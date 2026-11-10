@@ -1,0 +1,33 @@
+[project]
+name = "agentdock"
+version = "0.1.0"
+description = "A paved road for shipping LangGraph agents: write the graph, get auth, PII guards, audit traces, an eval gate and MCP + A2A endpoints."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "langchain-core>=1.7.7",
+    "langchain-google-genai>=4.4.3",
+    "langchain-openai>=1.7.4",
+    "langgraph>=1.2.20",
+    "langgraph-cli[inmem]>=0.4.42",
+    "langgraph-sdk>=0.4.14",
+]
+
+[project.scripts]
+dock = "agentdock.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "pytest-asyncio>=1.4.1.post1",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["uv_build>=0.9.3,<0.10.0"]
+build-backend = "uv_build"

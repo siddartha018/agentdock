@@ -1,0 +1,7 @@
+# Platform-wide settings. Teams don't edit this file.
+
+# Threads and store items are deleted this many minutes after their last update.
+retention_minutes = 43200  # 30 days
+
+# A deploy is blocked if an agent's eval pass rate drops below its baseline by more than this.
+regression_tolerance = 0.0
