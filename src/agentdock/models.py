@@ -17,8 +17,12 @@ from typing import Any, Callable, Sequence
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
+import json
+import re
+from typing import Iterator
+
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from langchain_core.tools import BaseTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
@@ -58,6 +62,32 @@ class ScriptedChatModel(BaseChatModel):
     ) -> ChatResult:
         msg = self.policy(messages, self.tool_names)
         return ChatResult(generations=[ChatGeneration(message=msg)])
+
+    def _stream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> Iterator[ChatGenerationChunk]:
+        """Stream word by word like a real model, so the streaming path is tested offline."""
+        msg = self.policy(messages, self.tool_names)
+        text = msg.content if isinstance(msg.content, str) else ""
+        for piece in re.findall(r"\S+\s*|\s+", text):
+            chunk = ChatGenerationChunk(message=AIMessageChunk(content=piece))
+            if run_manager:
+                run_manager.on_llm_new_token(piece, chunk=chunk)
+            yield chunk
+        if msg.tool_calls:
+            yield ChatGenerationChunk(
+                message=AIMessageChunk(
+                    content="",
+                    tool_call_chunks=[
+                        {"name": tc["name"], "args": json.dumps(tc["args"]), "id": tc["id"], "index": i}
+                        for i, tc in enumerate(msg.tool_calls)
+                    ],
+                )
+            )
 
 
 def model_name() -> str:

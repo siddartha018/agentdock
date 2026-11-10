@@ -109,3 +109,37 @@ async def test_subgraph_streaming_cannot_see_raw_state(mode):
     ):
         chunks.append(str(item))
     assert chunks and not any("123-45-6789" in c or "DE89 3704" in c for c in chunks)
+
+
+@pytest.mark.parametrize("engine", ["patterns", "presidio"])
+async def test_opt_in_streaming_emits_redacted_tokens_that_match_the_final_answer(engine, monkeypatch):
+    if engine == "presidio":
+        pytest.importorskip("presidio_analyzer")
+    monkeypatch.setenv("AGENTDOCK_PII_ENGINE", engine)
+    deltas = []
+    final = None
+    async for mode, data in AGENTS["policy_qa"].astream(
+        {"messages": [HumanMessage("Show my full record including SSN")]},
+        run_config_for("E100"), stream_mode=["custom", "values"],
+    ):
+        if mode == "custom":
+            deltas.append(data["delta"])
+        else:
+            final = data
+    if engine == "patterns":
+        assert len(deltas) > 3  # token by token; NER waits for sentence ends instead
+    assert not any("123-45-6789" in d or "DE89" in d for d in deltas)
+    assert "".join(deltas).strip() == final["messages"][-1].content.strip()
+
+
+async def test_streaming_is_off_for_agents_that_did_not_opt_in():
+    chunks = [c async for c in AGENTS["expense_check"].astream(
+        {"messages": [HumanMessage("$20 taxi")]}, run_config_for("E100"), stream_mode="custom")]
+    assert chunks == []
+
+
+async def test_tool_call_args_scrubbed_in_state():
+    msgs = await ask("policy_qa", "E100", "Balance for E100, my ssn is 111-22-3333 and DOB: 01/02/1990")
+    for m in msgs:
+        for tc in getattr(m, "tool_calls", []) or []:
+            assert "111-22-3333" not in str(tc["args"]) and "01/02/1990" not in str(tc["args"])

@@ -39,6 +39,7 @@ class Manifest:
     allowed_roles: list[str]
     path: Path
     gate: Gate = field(default_factory=Gate)
+    stream: bool = False  # opt in to redacted token streaming
 
     @property
     def graph_file(self) -> Path:
@@ -62,6 +63,9 @@ def load_manifest(agent_dir: Path) -> Manifest:
         problems.append("name must be snake_case, 3-41 chars")
     if len(raw.get("description", "")) < 20:
         problems.append("description must be at least 20 chars (it becomes the MCP tool and A2A card text)")
+    if "'" in raw.get("description", ""):
+        # `langgraph build` puts descriptions in a single-quoted Dockerfile ENV line.
+        problems.append("description must not contain an apostrophe (breaks `langgraph build`)")
     if not raw.get("owner_team"):
         problems.append("owner_team is required")
     if raw.get("kind") not in KINDS:
@@ -70,6 +74,8 @@ def load_manifest(agent_dir: Path) -> Manifest:
     if not roles or not set(roles) <= ROLES:
         problems.append(f"allowed_roles must be a non-empty subset of {sorted(ROLES)}")
     gate = Gate(**raw.get("gate", {}))
+    if not isinstance(raw.get("stream", False), bool):
+        problems.append("stream must be true or false")
     if not 0 < gate.min_pass_rate <= 1:
         problems.append("gate.min_pass_rate must be in (0, 1]")
     if problems:
@@ -82,6 +88,7 @@ def load_manifest(agent_dir: Path) -> Manifest:
         allowed_roles=list(roles),
         path=agent_dir,
         gate=gate,
+        stream=raw.get("stream", False),
     )
 
 
@@ -119,6 +126,7 @@ def langgraph_config(manifests: list[Manifest], retention_minutes: int) -> dict[
             for m in manifests
         },
         "auth": {"path": "./src/agentdock/auth.py:auth"},
+        "http": {"app": "./src/agentdock/http_app.py:app"},
         "env": ".env",
         "checkpointer": {
             "ttl": {

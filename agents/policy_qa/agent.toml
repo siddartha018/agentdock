@@ -3,6 +3,8 @@ description = "Answers HR policy questions (vacation, sick leave, parental leave
 owner_team = "people-tech"
 kind = "react"
 allowed_roles = ["employee", "manager", "hr"]
+# Stream the answer token by token (redacted) on the custom stream mode.
+stream = true
 
 [gate]
 min_pass_rate = 0.9

@@ -1,8 +1,10 @@
 name = "concierge"
-description = "Front door for employee questions. Works out which specialist agent should answer (HR policy and leave balances, or expense checks) and asks it over A2A on the employee's behalf."
+description = "Front door for employee questions. Works out which specialist agent should answer (HR policy and leave balances, or expense checks) and asks it over A2A on behalf of the employee."
 owner_team = "platform"
 kind = "react"
 allowed_roles = ["employee", "manager", "hr"]
+# Stream the answer token by token (redacted) on the custom stream mode.
+stream = true
 
 [gate]
 min_pass_rate = 0.9
