@@ -4,6 +4,8 @@ An internal agent platform you can run on a laptop. A team writes one LangGraph 
 
 The idea is from a talk by Workday's agent-platform team: their teams write only the graph, and security, auth and the MCP and A2A endpoints come with the platform. This is a small, working version of that pattern, built on LangChain's open-source Agent Server.
 
+**Live demo:** [agentdock-nu.vercel.app](https://agentdock-nu.vercel.app) (serverless edition, offline model, fake data) · **Walkthrough film (1:03):** [siddartha018.in/work/agentdock](https://www.siddartha018.in/work/agentdock)
+
 ## Measured
 
 | What | Result |
@@ -135,6 +137,10 @@ All data is fake.
 - **NER streaming waits for sentence ends**, so a short answer with no sentence break arrives in one piece. The pattern engine streams word by word.
 - **The offline policies are scripted**, so a green offline gate proves the plumbing, auth and rules, not model quality. That's what the real-model run is for.
 
+## Serverless edition (Vercel)
+
+`deploy/vercel/` is a FastAPI app that imports this package and runs the same path per request (`auth.resolve` → platform wrapper → audit) on the offline model, with small MCP (`/mcp`) and A2A (`/a2a/<agent>`) endpoints and a live eval-gate button. The Agent Server needs a long-running process, so this edition has no retention sweeper or real-model calls. Deploy with `scripts/deploy_vercel.sh` (it builds a plain-copy bundle, no git metadata).
+
 ## Layout
 
 ```
@@ -142,6 +148,7 @@ src/agentdock/   auth, identity, pii, platform (wrapper), audit, retention, http
 agents/          one folder per agent
 data/            fake directory and HR records
 config/          platform.toml, dev key hashes
-scripts/         demo.py (HTTP end-to-end), time_to_prototype.py, check_retention.py
+scripts/         demo.py (HTTP end-to-end), time_to_prototype.py, check_retention.py, deploy_vercel.sh
+deploy/vercel/   serverless playground (FastAPI + static page)
 tests/           unit tests (no server, no keys)
 ```
