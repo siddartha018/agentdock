@@ -11,3 +11,4 @@ evals/results/latest.json
 .vercel-bundle/
 deploy/vercel-project.json
 .hallmark/
+Dockerfile.hf
