@@ -12,7 +12,9 @@ The idea is from a talk by Workday's agent-platform team: their teams write only
 | End-to-end HTTP checks against a running server | **10/10** (`scripts/demo.py`) |
 | Eval suite, offline scripted model (what CI runs) | **27/27** |
 | Eval suite, real model (Gemini 3.5 Flash-Lite, free tier) on the two LLM agents | **18/18** (`evals/results/gemini-*.json`) |
-| Unit tests | **32**, ~0.4 s, no keys, no server |
+| Retention: a conversation past its TTL is deleted on a real server | **deleted in 10 s** with a 6 s TTL (`scripts/check_retention.py`) |
+| Streaming redactor, 40 random chunkings of a PII-heavy text | **0 raw values released**; output identical to redacting it whole |
+| Unit tests | **104**, ~2 s, no keys, no server |
 
 ## What a team writes
 
@@ -33,15 +35,20 @@ flowchart LR
   A --> W
   subgraph W[Platform wrapper, one per agent]
     direction LR
-    G[role check] --> R1[redact PII in input] --> T[team's graph<br/>as a subgraph] --> R2[redact PII in output<br/>and tool results] --> L[audit record]
+    G[role check] --> R1[redact PII in input] --> T[team's graph<br/>sealed off] --> R2[redact output, tool results<br/>and tool-call args] --> L[audit record]
+    T -. opt-in .-> SR[streaming redactor] -.-> C
   end
-  W --> S[(thread state<br/>owner-scoped, TTL)]
+  W --> S[(thread state<br/>owner-scoped)]
+  RS[retention sweeper<br/>svc-retention] -->|delete idle threads| S
 ```
 
 - **Auth on every route.** `/mcp` and `/a2a` sit behind the same handler as REST. With no key you get a 401. Threads are stamped with their owner, so another user who asks for your thread gets a 404.
 - **Delegation, not escalation.** The concierge agent calls other agents over A2A with a service key plus `x-on-behalf-of: <person>`. The callee runs as that person, so going through the concierge never widens access. Only identities with the `delegate` scope may delegate (an employee key that tries gets a 403).
 - **Access control in code, not prompts.** `leave_balance` checks the caller itself: employees see their own balance, managers see their direct reports, HR sees everyone. In the real-model run, Gemini *did* try to fetch another employee's balance, and the tool refused.
-- **PII redaction both ways.** The wrapper redacts SSNs, IBANs, cards, emails and phone numbers before the agent sees the input. It redacts again on everything the agent produced, including tool results kept in thread state. The team graph runs sealed off: no checkpoints of its own and no streaming out of it, so unredacted intermediate state is never persisted or streamed.
+- **PII redaction both ways.** Before the agent sees the input, the wrapper redacts SSNs, IBANs, cards, emails, phone numbers, street addresses, postcodes, dates of birth and person names. Names come from the company directory or from context ("my name is ...", "Dr. ..."). It redacts again on everything the agent produced: text, tool results kept in thread state, and **tool-call arguments** (including the provider's raw JSON copy). The team graph runs sealed off: no checkpoints of its own, and nothing streamed out of it except through the redactor.
+- **NER for what patterns can't know.** Set `pii_engine = "presidio"` (`uv sync --extra ner`) to add Microsoft Presidio with spaCy for names the directory doesn't list. Places are opt-in (`pii_ner_entities`), because redacting "a flight to Berlin" hurts answers more than it protects anyone.
+- **Safe token streaming, opt-in.** Agents with `stream = true` stream their answer word by word on the `custom` stream mode. The streaming redactor never releases text within 96 characters of the end of its buffer or inside a detected span, so a value split across chunks is still caught. With NER on, it waits for sentence ends so the model sees whole sentences.
+- **Retention that actually runs.** The platform's own sweeper deletes threads idle longer than `retention_minutes` (30 days by default). It runs as `svc-retention`, which may search and delete threads but gets a 403 if it tries to read one.
 - **Audit log.** One JSON line per run: caller, `via`, tools, redaction counts, latency, denial or error type. Each line hashes the previous one, so `dock audit --verify` catches an edited record.
 - **Eval gate.** `dock serve` refuses to start if any agent is below its floor, regresses from `evals/baseline.json`, has too few cases, or has no negative (`not_contains` or `denied`) case. CI runs the same gate.
 - **Errors stay inside.** A crashing agent returns "hit an internal error". The traceback goes to the server log and the error type to the audit log.
@@ -57,12 +64,30 @@ uv run python scripts/demo.py
 uv run dock audit --tail 10
 ```
 
-`.env` for `dock serve` (A2A between agents over HTTP):
+`.env` for `dock serve` (A2A between agents over HTTP, and the retention sweeper):
 
 ```
 AGENTDOCK_A2A_URL=http://127.0.0.1:2024
 AGENTDOCK_SERVICE_KEY=dk_dev_svc-concierge
+AGENTDOCK_RETENTION_KEY=dk_dev_svc-retention
 ```
+
+Stream an answer token by token:
+
+```bash
+curl -N http://127.0.0.1:2024/runs/stream -H "x-api-key: dk_dev_e100" -H "content-type: application/json" \
+  -d '{"assistant_id":"policy_qa","stream_mode":["custom"],"input":{"messages":[{"role":"user","content":"Can I carry over vacation days?"}]}}'
+```
+
+### Production server (Docker + Postgres + Redis)
+
+```bash
+uv run langgraph build -t agentdock-api
+docker compose up -d                                   # API on :8123
+uv run python scripts/demo.py --url http://127.0.0.1:8123
+```
+
+The image builds, and the production runtime starts against Postgres and Redis and runs its migrations. The self-hosted server then checks a license at startup, so it needs `LANGSMITH_API_KEY` from a free LangSmith account (or a `LANGGRAPH_CLOUD_LICENSE_KEY`) in `.env`. Without one it exits with "License verification failed".
 
 Dev API keys are `dk_dev_<identity>`: `dk_dev_e100` (employee), `dk_dev_m200` (manager), `dk_dev_h300` (HR), and so on, for the fake people in `data/directory.json`. Only their SHA-256 hashes are stored (`config/dev_keys.json`). Point `AGENTDOCK_KEYS_FILE` at your own table for anything real.
 
@@ -99,24 +124,24 @@ All data is fake.
 - **Blocking I/O on the event loop.** The dev server's detector flagged the synchronous audit-log write, which would stall every concurrent run. It now runs in a worker thread.
 - **The first evals only checked the offline model's wording.** On Gemini they failed, even though its answers were correct ("not authorized" vs "may not view"). The cases now check facts and outcomes (numbers, refusals, tools called, secrets absent), and a `contains` entry can list several acceptable phrasings.
 - **Subgraph streaming leaked raw PII.** The final responses were clean, but a caller asking for `stream_subgraphs` received the team graph's unredacted state (SSN included) in every stream mode. I'd written "streaming isn't redacted" as a known limit, tested that claim before committing, and found the real hole was wider. The team graph now runs in an isolated context with a config that carries only the caller, and a regression test covers 4 stream modes.
+- **Retention didn't run at all.** I'd listed the TTL as "configured but untested". The test showed the thread was still there after 3 minutes, because the in-memory runtime's TTL sweeper is a stub ("Not implemented for inmem server"). Then the platform sweeper I added died silently on its first call: `langgraph_sdk.get_client` rejects `x-api-key` as a custom header, and the key has to go in `api_key=`. It now reports fatal errors to the server log.
+- **`langgraph build` broke on an apostrophe.** The CLI writes agent descriptions into a single-quoted Dockerfile `ENV` line, so "the employee's behalf" failed the build. `dock check` now rejects apostrophes in descriptions.
 - **Gemini 3 returned 400 on the second tool turn** through the OpenAI-compatible endpoint, because that client drops the `thought_signature` the next turn must echo back. The fix was the native client.
 
 ## Limits (not hidden)
 
-- **No token-by-token streaming from inside an agent.** The team graph runs sealed off, and callers only see the wrapper's scrubbed messages. That is the price of the fix below; per-agent opt-in streaming with a streaming-safe redactor is the next step.
-- **Tool-call arguments are not redacted**, only message content.
-- **Retention TTL is configured** (`checkpointer.ttl` in `langgraph.json`, 30 days in `config/platform.toml`), but I didn't verify the sweeper on the in-memory dev runtime.
-- **Only tested on the local dev server.** Not tested on LangSmith Deployment or a self-hosted production Agent Server. The config is standard, but that is unverified.
-- **Regex PII detection** catches the formats listed, not names or free-text addresses.
+- **Production server not run end to end yet.** It's blocked only on the free LangSmith key above. Everything before the license check works: the image build, Postgres, Redis and migrations.
+- **NER is the small spaCy model.** It catches names the patterns miss, but it sometimes gives an entity the wrong label (it called "Bangalore" a person, which still gets redacted). Use a larger model for higher accuracy.
+- **NER streaming waits for sentence ends**, so a short answer with no sentence break arrives in one piece. The pattern engine streams word by word.
 - **The offline policies are scripted**, so a green offline gate proves the plumbing, auth and rules, not model quality. That's what the real-model run is for.
 
 ## Layout
 
 ```
-src/agentdock/   auth, identity, pii, platform (wrapper), audit, evals, models, a2a_client, cli, templates/
+src/agentdock/   auth, identity, pii, platform (wrapper), audit, retention, http_app, evals, models, a2a_client, cli, templates/
 agents/          one folder per agent
 data/            fake directory and HR records
 config/          platform.toml, dev key hashes
-scripts/         demo.py (HTTP end-to-end), time_to_prototype.py
+scripts/         demo.py (HTTP end-to-end), time_to_prototype.py, check_retention.py
 tests/           unit tests (no server, no keys)
 ```

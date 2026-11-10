@@ -1,0 +1,8 @@
+.venv
+.git
+.env
+.langgraph_api
+.traces
+.pytest_cache
+**/__pycache__
+evals/results

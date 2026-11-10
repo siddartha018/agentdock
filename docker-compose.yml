@@ -1,0 +1,40 @@
+# Production-style Agent Server: the real langgraph-api image backed by
+# Postgres (threads, checkpoints, TTL sweeps) and Redis (run queue, streaming).
+#
+#   uv run langgraph build -t agentdock-api
+#   docker compose up -d
+#
+# Needs LANGSMITH_API_KEY (free LangSmith account) or LANGGRAPH_CLOUD_LICENSE_KEY
+# in .env: the self-hosted server checks it at startup.
+services:
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 20
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: agentdock
+      POSTGRES_USER: agentdock
+      POSTGRES_PASSWORD: agentdock-local-only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentdock"]
+      interval: 2s
+      retries: 20
+  api:
+    image: agentdock-api
+    ports:
+      - "8123:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      REDIS_URI: redis://redis:6379
+      DATABASE_URI: postgres://agentdock:agentdock-local-only@postgres:5432/agentdock?sslmode=disable
+      N_JOBS_PER_WORKER: "8"
+      AGENTDOCK_A2A_URL: http://127.0.0.1:8000
