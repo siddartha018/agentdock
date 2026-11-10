@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentdock playground</title>
+<meta name="description" content="A live playground for agentdock: an internal agent platform on LangGraph with auth, PII redaction, an audit log, an eval gate and MCP + A2A endpoints.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 2h12v4H2zM2 8h5v6H2zM9 8h5v6H9z' fill='%232f5fd0'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./page.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="container nav__in">
+    <a class="wordmark" href="#top" aria-label="agentdock home">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h12v4H2zM2 8h5v6H2zM9 8h5v6H9z" fill="currentColor"/></svg>
+      agentdock
+    </a>
+    <nav class="nav__links" aria-label="Sections">
+      <a href="#playground">Playground</a>
+      <a href="#gate">Eval gate</a>
+      <a href="#connect">Connect</a>
+    </nav>
+    <a class="key key--sm" href="https://github.com/siddartha018/agentdock">Source on GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="container hero__in">
+      <div>
+        <h1>Write the graph. Get the platform.</h1>
+        <p class="lead">Auth, PII redaction, audit and an eval gate around any LangGraph agent.</p>
+        <div class="hero__actions">
+          <a class="key key--primary" href="#playground">Send a request</a>
+          <a class="key" href="https://github.com/siddartha018/agentdock#readme">Read how it works</a>
+        </div>
+        <p class="hero__note">Every request below runs the real platform code. The data is fake.</p>
+      </div>
+      <div class="field" aria-hidden="true">
+        <div class="field__still"></div>
+        <canvas id="field"></canvas>
+        <div class="field__legend"><span>Raw input</span><span>What the agent and the log see</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="playground">
+    <div class="container">
+      <div class="section__head">
+        <h2>Send a request as someone</h2>
+        <p>Pick an agent and a person. Their API key decides what the agent may see.</p>
+      </div>
+
+      <div class="bench">
+        <div class="controls">
+          <div>
+            <p class="label" id="agent-label">Agent</p>
+            <div class="tray" role="group" aria-labelledby="agent-label" id="agents">
+              <button class="key" type="button" aria-pressed="true" data-agent="policy_qa">policy_qa</button>
+              <button class="key" type="button" aria-pressed="false" data-agent="expense_check">expense_check</button>
+              <button class="key" type="button" aria-pressed="false" data-agent="concierge">concierge</button>
+            </div>
+            <p class="who" id="agent-desc"></p>
+          </div>
+          <div>
+            <p class="label" id="person-label">Calling as</p>
+            <div class="tray" role="group" aria-labelledby="person-label" id="people"></div>
+            <p class="who" id="person-desc"></p>
+          </div>
+          <div>
+            <p class="label">Try</p>
+            <div class="samples" id="samples"></div>
+          </div>
+          <form class="ask" id="ask">
+            <label class="visually-hidden" for="msg">Message</label>
+            <textarea id="msg" maxlength="600" placeholder="Ask the agent something">Show my full record including SSN and bank details</textarea>
+            <div class="ask__row">
+              <span class="count" id="count">0 / 600</span>
+              <button class="key key--primary" type="submit" id="send">Send</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="output">
+          <div class="answer cut" aria-live="polite">
+            <p class="label">Answer</p>
+            <div class="answer__text" id="answer"><span class="answer__empty">The answer streams here, already redacted.</span></div>
+            <p class="answer__meta" id="answer-meta"></p>
+            <noscript><p>The playground needs JavaScript. The same API is at <code>POST /api/run</code>.</p></noscript>
+          </div>
+          <div class="trace cut">
+            <p class="label">Under the hood</p>
+            <ol id="trace">
+              <li class="step"><span class="step__tick"></span><span><span class="step__name">Authenticate</span><br><span class="step__detail">API key to a person and role</span></span><span class="step__ms"></span></li>
+              <li class="step"><span class="step__tick"></span><span><span class="step__name">Role check</span><br><span class="step__detail">allowed_roles in agent.toml</span></span><span class="step__ms"></span></li>
+              <li class="step"><span class="step__tick"></span><span><span class="step__name">Redact input</span><br><span class="step__detail">before the agent sees it</span></span><span class="step__ms"></span></li>
+              <li class="step"><span class="step__tick"></span><span><span class="step__name">Agent graph</span><br><span class="step__detail">tools and A2A calls</span></span><span class="step__ms"></span></li>
+              <li class="step"><span class="step__tick"></span><span><span class="step__name">Redact output</span><br><span class="step__detail">text, tool results, tool arguments</span></span><span class="step__ms"></span></li>
+              <li class="step"><span class="step__tick"></span><span><span class="step__name">Audit record</span><br><span class="step__detail">hash-chained, one line per run</span></span><span class="step__ms"></span></li>
+            </ol>
+          </div>
+          <div class="auditpane graphite">
+            <div class="auditpane__bar"><span>audit.jsonl</span><span id="audit-hash">no run yet</span></div>
+            <pre id="audit"><span class="c">// the record this run wrote</span></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="gate">
+    <div class="container">
+      <div class="section__head">
+        <h2>The gate every deploy passes</h2>
+        <p>Each case runs as a specific person. Below its floor or baseline, the server won’t start.</p>
+      </div>
+      <div class="gatebar">
+        <button class="key key--primary" type="button" id="run-gate">Run the gate now</button>
+        <span class="gatebar__result" id="gate-result"></span>
+        <span class="gatebar__sub" id="gate-sub">27 cases across 3 agents, offline model</span>
+      </div>
+      <table>
+        <thead><tr><th scope="col">Agent</th><th scope="col">Cases</th><th scope="col" class="num">Passed</th><th scope="col" class="num hide-sm">Floor</th></tr></thead>
+        <tbody id="gate-rows">
+          <tr><td class="agentname">policy_qa</td><td>12 cases</td><td class="num">not run</td><td class="num hide-sm">90%</td></tr>
+          <tr><td class="agentname">expense_check</td><td>9 cases</td><td class="num">not run</td><td class="num hide-sm">100%</td></tr>
+          <tr><td class="agentname">concierge</td><td>6 cases</td><td class="num">not run</td><td class="num hide-sm">90%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="section" id="connect">
+    <div class="container">
+      <div class="section__head">
+        <h2>Call it from Claude Code or another agent</h2>
+        <p>Every agent is an MCP tool and an A2A agent. Use any key from the playground.</p>
+      </div>
+      <div class="connect">
+        <div>
+          <h3>MCP</h3>
+          <p>Adds all three agents as tools, acting as Asha (employee).</p>
+          <div class="cmd"><pre id="cmd-mcp">claude mcp add --transport http agentdock https://example.com/mcp --header "x-api-key: dk_dev_e100"</pre><button class="key key--sm" type="button" data-copy="cmd-mcp">Copy</button></div>
+        </div>
+        <div>
+          <h3>A2A</h3>
+          <p>Sends one message to the expense agent.</p>
+          <div class="cmd"><pre id="cmd-a2a">curl -s https://example.com/a2a/expense_check -H "x-api-key: dk_dev_e100" -H "content-type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","messageId":"m1","parts":[{"kind":"text","text":"$80 dinner, receipt attached"}]}}}'</pre><button class="key key--sm" type="button" data-copy="cmd-a2a">Copy</button></div>
+        </div>
+      </div>
+      <p class="honest">This deployment runs the platform code per request on a serverless function, with the free offline model. The full version runs on LangGraph Agent Server with <code>dock serve</code>, with token streaming, a retention sweeper and real models.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section__head">
+        <h2>Measured, not claimed</h2>
+        <p>From the repository’s scripts and test suite.</p>
+      </div>
+      <table class="numbers">
+        <tbody>
+          <tr><td>New agent to a live, authenticated MCP and A2A endpoint</td><td class="big num">2.8 s</td></tr>
+          <tr><td>Eval cases passing on Gemini 3.5 Flash-Lite</td><td class="big num">18 / 18</td></tr>
+          <tr><td>Raw PII released across 40 random chunkings of a stream</td><td class="big num">0</td></tr>
+          <tr><td>Unit tests, no keys and no server</td><td class="big num">104</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <p class="footer__mast" aria-hidden="true">agentdock</p>
+    <div class="footer__row">
+      <span>Built by <a href="https://www.siddartha018.in">Siddartha</a>. Fake people, fake data.</span>
+      <nav aria-label="Footer">
+        <a href="https://github.com/siddartha018/agentdock">GitHub</a>
+        <a href="https://github.com/siddartha018/agentdock#readme">README</a>
+        <a href="https://docs.langchain.com/langsmith/server-mcp">Agent Server MCP docs</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const state = { agent: "policy_qa", person: "E100", meta: null, busy: false };
+  const host = location.origin;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const toast = (t) => { const el = $("#toast"); el.textContent = t; el.dataset.show = "true"; clearTimeout(toast.t); toast.t = setTimeout(() => (el.dataset.show = "false"), 1800); };
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // commands point at this deployment
+  for (const id of ["cmd-mcp", "cmd-a2a"]) { const el = document.getElementById(id); el.textContent = el.textContent.replace("https://example.com", host); }
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(document.getElementById(b.dataset.copy).textContent); toast("Copied"); } catch { toast("Copy failed, select the text instead"); }
+  }));
+
+  const person = () => state.meta.people.find((p) => p.id === state.person);
+  const agent = () => state.meta.agents.find((a) => a.name === state.agent);
+
+  function renderPeople() {
+    $("#people").innerHTML = state.meta.people.map((p) =>
+      `<button class="key" type="button" aria-pressed="${p.id === state.person}" data-person="${p.id}">${esc(p.name.split(" ")[0])} <small>${p.role}</small></button>`).join("");
+    const p = person();
+    const mgr = p.manager ? `, reports to ${p.manager}` : "";
+    $("#person-desc").textContent = `${p.id}, ${p.role} on ${p.team}${mgr}. Key ${p.key}`;
+  }
+  function renderAgent() {
+    document.querySelectorAll("[data-agent]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.agent === state.agent)));
+    const a = agent();
+    $("#agent-desc").textContent = `${a.kind === "workflow" ? "Workflow, no LLM" : "ReAct agent"}. Open to ${a.roles.join(", ")}.`;
+    $("#samples").innerHTML = a.samples.map((s) => `<button class="sample" type="button" title="${esc(s)}">${esc(s)}</button>`).join("");
+  }
+  function count() { $("#count").textContent = `${$("#msg").value.length} / 600`; }
+
+  const mark = (text) => esc(text).replace(/\[([A-Z]+) REDACTED\]/g, '<span class="redacted">$1 redacted</span>');
+
+  function setStep(i, st, detail, ms) {
+    const li = $("#trace").children[i];
+    li.dataset.state = st;
+    if (detail != null) li.querySelector(".step__detail").textContent = detail;
+    li.querySelector(".step__ms").textContent = ms || "";
+  }
+  const counts = (o) => { const e = Object.entries(o || {}); return e.length ? e.map(([k, v]) => `${v} ${k}`).join(", ") : "nothing found"; };
+
+  function jsonHtml(obj) {
+    return esc(JSON.stringify(obj, null, 2)).replace(/^(\s*)&quot;([^&]+)&quot;:/gm, '$1<span class="k">"$2"</span>:');
+  }
+
+  async function play(deltas) {
+    const el = $("#answer");
+    if (reduce || !deltas.length) return;
+    let acc = "";
+    for (const d of deltas) {
+      for (const word of d.match(/\S+\s*|\s+/g) || []) {
+        acc += word;
+        el.innerHTML = mark(acc) + '<span class="caret"></span>';
+        await new Promise((r) => setTimeout(r, 28));
+      }
+    }
+  }
+
+  async function send(e) {
+    e && e.preventDefault();
+    if (state.busy) return;
+    const message = $("#msg").value.trim();
+    if (!message) return;
+    state.busy = true; $("#send").disabled = true;
+    $("#answer").innerHTML = '<span class="caret"></span>';
+    $("#answer-meta").textContent = "";
+    [...$("#trace").children].forEach((li, i) => setStep(i, "", null, ""));
+    try {
+      const r = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json", "x-api-key": person().key }, body: JSON.stringify({ agent: state.agent, message }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      const rec = d.audit[0] || {};
+      setStep(0, "ok", `${d.caller.identity}, ${d.caller.role}${d.caller.via ? ` via ${d.caller.via}` : ""}`);
+      if (rec.denied) {
+        setStep(1, "stop", `${d.caller.role} is not in allowed_roles`);
+        for (const i of [2, 3, 4]) setStep(i, "", "skipped");
+      } else {
+        setStep(1, "ok", `${d.caller.role} allowed`);
+        setStep(2, rec.redacted_in && Object.keys(rec.redacted_in).length ? "hit" : "ok", counts(rec.redacted_in));
+        const tools = (rec.tools || []).length ? `called ${rec.tools.join(", ")}` : "no tools";
+        const subs = d.sub_runs.map((s) => `${s.agent} over A2A as ${s.caller}`).join("; ");
+        setStep(3, "ok", subs ? `${tools}; ${subs}` : tools, `${rec.latency_ms} ms`);
+        setStep(4, rec.redacted_out && Object.keys(rec.redacted_out).length ? "hit" : "ok", counts(rec.redacted_out));
+      }
+      setStep(5, "ok", `${rec.hash ? rec.hash.slice(0, 12) : ""}, prev ${rec.prev ? rec.prev.slice(0, 8) : ""}`);
+      $("#audit").innerHTML = jsonHtml(rec);
+      $("#audit-hash").textContent = rec.hash ? `sha256 ${rec.hash.slice(0, 16)}` : "";
+      await play(d.deltas);
+      $("#answer").innerHTML = mark(d.answer);
+      const streamed = d.deltas.length ? `${d.deltas.length} redacted stream chunks` : "not streamed (workflow agent)";
+      $("#answer-meta").textContent = `${d.ms} ms on the server, ${streamed}, model: offline`;
+    } catch (err) {
+      $("#answer").textContent = `Request failed: ${err.message}`;
+    } finally {
+      state.busy = false; $("#send").disabled = false;
+    }
+  }
+
+  async function runGate() {
+    const b = $("#run-gate"); b.disabled = true; $("#gate-result").textContent = "Running";
+    try {
+      const r = await fetch("/api/gate", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      const total = d.agents.reduce((n, a) => n + a.cases, 0), passed = d.agents.reduce((n, a) => n + a.passed, 0);
+      const res = $("#gate-result"); res.dataset.green = String(d.green);
+      res.textContent = d.green ? `Green, ${passed} / ${total}` : `Blocked, ${passed} / ${total}`;
+      $("#gate-sub").textContent = `${d.ms} ms on the server${d.problems.length ? ": " + d.problems.join("; ") : ""}`;
+      $("#gate-rows").innerHTML = d.agents.map((a) => `<tr>
+        <td class="agentname">${a.agent}</td>
+        <td><div class="cases">${a.results.map((c) => `<span class="case" data-pass="${c.passed}" title="${esc(c.id)}${c.failures.length ? ": " + esc(c.failures.join("; ")) : ""}"></span>`).join("")}</div></td>
+        <td class="num">${a.passed} / ${a.cases}</td><td class="num hide-sm">${Math.round(a.floor * 100)}%</td></tr>`).join("");
+    } catch (err) {
+      $("#gate-result").textContent = `Failed: ${err.message}`;
+    } finally { b.disabled = false; }
+  }
+
+  async function init() {
+    try {
+      state.meta = await (await fetch("/api/meta")).json();
+    } catch { $("#agent-desc").textContent = "Could not reach the API."; return; }
+    renderPeople(); renderAgent(); count();
+    $("#agents").addEventListener("click", (e) => { const b = e.target.closest("[data-agent]"); if (!b) return; state.agent = b.dataset.agent; renderAgent(); $("#msg").value = agent().samples[0] || ""; count(); });
+    $("#people").addEventListener("click", (e) => { const b = e.target.closest("[data-person]"); if (!b) return; state.person = b.dataset.person; renderPeople(); });
+    $("#samples").addEventListener("click", (e) => { const b = e.target.closest(".sample"); if (!b) return; $("#msg").value = b.textContent; count(); send(); });
+    $("#msg").addEventListener("input", count);
+    $("#ask").addEventListener("submit", send);
+    $("#run-gate").addEventListener("click", runGate);
+  }
+  init();
+
+  // ---- the field: raw values cross the hairline and leave redacted ----
+  const canvas = $("#field");
+  const ctx = canvas.getContext("2d");
+  const css = getComputedStyle(document.documentElement);
+  const col = (n) => css.getPropertyValue(n).trim();
+  const tints = ["--color-glyph-1", "--color-glyph-2", "--color-glyph-3", "--color-glyph-4"].map(col);
+  const accent = col("--color-accent"), deep = col("--color-accent-deep"), rule = col("--color-rule-2"), muted = col("--color-muted");
+  const ramp = " .:-=+*#%@";
+  const RAW = ["123-45-6789", "a.rao@example.com", "DE89 3704 0044", "+1 415 555 0134", "221B Baker Street", "DOB: 04/12/1990", "Asha Rao", "4111 1111 1111 1111"];
+  const OUT = ["[SSN]", "[EMAIL]", "[IBAN]", "[PHONE]", "[ADDRESS]", "[DOB]", "[PERSON]", "[CARD]"];
+  const CW = 8, CH = 16;
+  let W = 0, H = 0, cols = 0, rows = 0, lanes = [], t = 0, raf = 0, visible = true;
+  function size() {
+    const r = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    W = r.width; H = r.height - 24; canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); cols = Math.floor(W / CW); rows = Math.floor(H / CH);
+    lanes = Array.from({ length: Math.min(8, Math.max(3, Math.floor(rows / 3))) }, (_, i) => ({
+      row: Math.floor((i + 0.5) * rows / Math.min(8, Math.max(3, Math.floor(rows / 3)))), k: i % RAW.length, x: (i * 0.37 % 1) * cols * 0.9 - 6, v: 0.12 + Math.random() * 0.1 }));
+  }
+  function noise(x, y, s) { return (Math.sin(x * 0.21 + s) + Math.sin(y * 0.37 - s * 0.7) + Math.sin((x + y) * 0.13 + s * 0.4)) / 3; }
+  function frame() {
+    ctx.clearRect(0, 0, W, H + 24);
+    ctx.font = `12px ${col("--font-outlier")}`; ctx.textBaseline = "top";
+    const mid = Math.floor(cols / 2);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const n = Math.pow((noise(x, y, t * 0.03) + 1) / 2, 1.6) * (x < mid ? 1 : 0.55);
+      const ch = ramp[Math.floor(n * (ramp.length - 1))];
+      if (ch === " ") continue;
+      ctx.fillStyle = tints[Math.min(3, Math.floor(n * 4))];
+      ctx.fillText(ch, x * CW, y * CH);
+    }
+    ctx.fillStyle = rule; ctx.fillRect(mid * CW + 3, 0, 1, H);
+    for (const l of lanes) {
+      const raw = RAW[l.k], out = OUT[l.k];
+      ctx.clearRect(0, l.row * CH, W, CH);
+      for (let i = 0; i < raw.length; i++) {
+        const cx = Math.floor(l.x) + i;
+        if (cx < 0 || cx >= mid) continue;
+        ctx.fillStyle = muted; ctx.fillText(raw[i], cx * CW, l.row * CH);
+      }
+      const ox = Math.floor(l.x) + raw.length;
+      if (ox > mid) {
+        const start = Math.max(mid + 1, Math.floor(l.x));
+        ctx.fillStyle = l.x > mid ? accent : deep;
+        ctx.fillText(out, start * CW, l.row * CH);
+      }
+      l.x += l.v;
+      if (l.x > cols + 4) { l.x = -raw.length - Math.random() * 20; l.k = (l.k + 3) % RAW.length; }
+    }
+    t++;
+  }
+  function loop() { if (!visible) return; frame(); raf = setTimeout(() => requestAnimationFrame(loop), 33); }
+  size(); addEventListener("resize", () => { size(); if (reduce) frame(); });
+  if (reduce) { for (let i = 0; i < 400; i++) lanes.forEach((l) => (l.x += l.v)); frame(); }
+  else {
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible) loop(); else clearTimeout(raf); }).observe(canvas);
+  }
+})();
+</script>
+</body>
+</html>

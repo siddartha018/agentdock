@@ -1,0 +1,5 @@
+fastapi>=0.115
+langgraph>=1.2.20
+langchain-core>=1.7.7
+langgraph-sdk>=0.4.14
+httpx>=0.28.1

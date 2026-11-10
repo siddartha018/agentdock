@@ -8,3 +8,6 @@ evals/results/latest.json
 .pytest_cache/
 .DS_Store
 .langgraph.retention-test.json
+.vercel-bundle/
+deploy/vercel-project.json
+.hallmark/

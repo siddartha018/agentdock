@@ -1,0 +1,23 @@
+{
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "{src/**,agents/**,data/**,config/**,evals/baseline.json}",
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
+}
