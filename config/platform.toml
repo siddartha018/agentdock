@@ -5,3 +5,13 @@ retention_minutes = 43200  # 30 days
 
 # A deploy is blocked if an agent's eval pass rate drops below its baseline by more than this.
 regression_tolerance = 0.0
+
+# PII engine: "patterns" (no dependencies) or "presidio" (NER, `uv sync --extra ner`).
+pii_engine = "patterns"
+# NER entities to redact when pii_engine = "presidio". Add "LOCATION" to also
+# redact cities and neighbourhoods (stricter, but hides "a flight to Berlin").
+pii_ner_entities = ["PERSON"]
+
+# How often the platform's retention sweeper runs (it deletes threads idle
+# longer than retention_minutes). Needs AGENTDOCK_RETENTION_KEY in .env.
+sweep_interval_seconds = 600
