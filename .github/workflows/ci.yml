@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen
+      - name: Unit tests
+        run: uv run pytest -q
+      - name: Agent manifests, graphs and eval files
+        run: uv run dock check
+      - name: Eval gate (offline model, no keys needed)
+        run: uv run dock eval
+      - name: langgraph.json is up to date
+        run: git diff --exit-code langgraph.json
