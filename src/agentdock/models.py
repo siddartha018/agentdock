@@ -169,7 +169,7 @@ def _real_model(name: str, temperature: float, fallback: bool) -> BaseChatModel:
             model=name.split(":", 1)[1],
             google_api_key=os.environ["GEMINI_API_KEY"],
             temperature=temperature,
-            timeout=20 if fallback else 30,
+            timeout=10 if fallback else 30,  # with a fallback, a slow free-tier call gives way fast
             max_retries=retries,
         )
     raise ValueError(f"Unknown AGENTDOCK_MODEL {name!r} (use 'offline', 'cloudflare:<model>' or 'gemini:<model>')")

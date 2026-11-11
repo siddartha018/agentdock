@@ -12,6 +12,7 @@ Server version is `dock serve` / the Docker stack.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import time
@@ -28,7 +29,7 @@ os.environ.setdefault("AGENTDOCK_FALLBACK", "offline")
 os.environ.setdefault("AGENTDOCK_PII_ENGINE", "patterns")
 
 from fastapi import FastAPI, Request  # noqa: E402
-from fastapi.responses import FileResponse, JSONResponse, Response  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse  # noqa: E402
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage  # noqa: E402
 from langgraph_sdk import Auth  # noqa: E402
 
@@ -117,7 +118,8 @@ def _msg(m: Any) -> dict[str, Any]:
     return out
 
 
-async def run_once(agent: str, message: str, user: dict[str, Any]) -> dict[str, Any]:
+async def run_events(agent: str, message: str, user: dict[str, Any]):
+    """Yield ("delta", text) as redacted chunks arrive, then ("done", payload)."""
     started = time.perf_counter()
     mark = len(audit.read())
     deltas: list[str] = []
@@ -128,12 +130,13 @@ async def run_once(agent: str, message: str, user: dict[str, Any]) -> dict[str, 
     ):
         if mode == "custom":
             deltas.append(data["delta"])
+            yield "delta", data["delta"]
         else:
             final = data
     records = audit.read()[mark:]
     msgs = (final or {}).get("messages", [])
     ai = [m for m in msgs if isinstance(m, AIMessage)]
-    return {
+    yield "done", {
         "model": model_used(ai[-1]) if ai else "none",
         "configured_model": CONFIGURED,
         "agent": agent,
@@ -145,6 +148,33 @@ async def run_once(agent: str, message: str, user: dict[str, Any]) -> dict[str, 
         "sub_runs": [r for r in records if r.get("agent") != agent],
         "ms": round((time.perf_counter() - started) * 1000, 1),
     }
+
+
+async def run_once(agent: str, message: str, user: dict[str, Any]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    async for kind, data in run_events(agent, message, user):
+        if kind == "done":
+            payload = data
+    return payload
+
+
+def _ndjson_stream(agent: str, message: str, user: dict[str, Any]) -> StreamingResponse:
+    """Newline-delimited JSON: start, then each redacted delta as it is produced, then done."""
+
+    async def lines():
+        caller = {k: user.get(k) for k in ("identity", "role", "team", "via")}
+        yield json.dumps({"type": "start", "caller": caller, "agent": agent}) + "\n"
+        try:
+            async for kind, data in run_events(agent, message, user):
+                if kind == "delta":
+                    yield json.dumps({"type": "delta", "text": data}) + "\n"
+                else:
+                    yield json.dumps({"type": "done", **data}) + "\n"
+        except Exception as exc:  # report, don't hang the reader
+            yield json.dumps({"type": "error", "error": f"{type(exc).__name__}: {exc}"[:300]}) + "\n"
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson",
+                             headers={"cache-control": "no-cache", "x-accel-buffering": "no"})
 
 
 @app.get("/api/meta")
@@ -177,6 +207,8 @@ async def api_run(request: Request) -> Response:
         return JSONResponse({"error": "unknown agent"}, status_code=404)
     if not message or len(message) > MAX_INPUT:
         return JSONResponse({"error": f"message must be 1-{MAX_INPUT} characters"}, status_code=400)
+    if body.get("stream"):
+        return _ndjson_stream(agent, message, user)
     return JSONResponse(await run_once(agent, message, user))
 
 

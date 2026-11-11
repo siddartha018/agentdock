@@ -20,6 +20,7 @@
       agentdock
     </a>
     <nav class="nav__links" aria-label="Sections">
+      <a href="#pattern">The pattern</a>
       <a href="#playground">Playground</a>
       <a href="#gate">Eval gate</a>
       <a href="#connect">Connect</a>
@@ -33,7 +34,7 @@
     <div class="container hero__in">
       <div>
         <h1>Write the graph. Get the platform.</h1>
-        <p class="lead">Auth, PII redaction, audit and an eval gate around any LangGraph agent.</p>
+        <p class="lead">The agent platform Workday runs on LangChain, rebuilt in the open.</p>
         <div class="hero__actions">
           <a class="key key--primary" href="#playground">Send a request</a>
           <a class="key" href="https://github.com/siddartha018/agentdock#readme">Read how it works</a>
@@ -45,6 +46,24 @@
         <canvas id="field"></canvas>
         <div class="field__legend"><span>Raw input</span><span>What the agent and the log see</span></div>
       </div>
+    </div>
+  </section>
+
+  <section class="section" id="pattern">
+    <div class="container">
+      <div class="section__head">
+        <h2>The platform Workday runs, rebuilt in the open</h2>
+        <p>In a <a href="https://www.youtube.com/watch?v=xM_BhmEyKAY">LangChain customer story</a>, Workday describes an internal agent platform on LangGraph Agent Server: any team writes a graph and gets a deployed, governed agent. agentdock builds the same thing, piece by piece.</p>
+      </div>
+      <div class="pattern" role="table" aria-label="Workday’s platform next to agentdock">
+        <div class="pattern__row pattern__row--head" role="row"><span role="columnheader">What Workday describes</span><span role="columnheader">How agentdock does it</span></div>
+        <div class="pattern__row" role="row"><p role="cell">Product teams only write the agent’s LangGraph graph.</p><p role="cell">A team adds <code>agents/&lt;name&gt;/graph.py</code> and an <code>agent.toml</code>. <code>dock new</code> scaffolds both.</p></div>
+        <div class="pattern__row" role="row"><p role="cell">Auth, security and data-retention rules come applied.</p><p role="cell">Custom Agent Server auth on every route, owner-scoped threads, PII redacted on the way in and out, and a retention sweeper.</p></div>
+        <div class="pattern__row" role="row"><p role="cell">Every agent is an MCP server and an A2A server.</p><p role="cell">The same <code>/mcp</code> and <code>/a2a</code> endpoints. Agents call each other on behalf of the user and never gain extra rights.</p></div>
+        <div class="pattern__row" role="row"><p role="cell">Tracing and evals in LangSmith.</p><p role="cell">LangSmith traces, a hash-chained audit log, and an eval gate that stops the server starting below its floor.</p></div>
+        <div class="pattern__row" role="row"><p role="cell">Prototype time fell from 4 to 5 months to under a day.</p><p role="cell">A new agent reaches a live, authenticated endpoint in 2.8 seconds.</p></div>
+      </div>
+      <p class="pattern__note">Workday’s side is as described in the video, which gives no architecture details. agentdock’s side is measured in this repository.</p>
     </div>
   </section>
 
@@ -152,7 +171,7 @@
           <div class="cmd"><pre id="cmd-a2a">curl -s https://example.com/a2a/expense_check -H "x-api-key: dk_dev_e100" -H "content-type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"message/send","params":{"message":{"role":"user","messageId":"m1","parts":[{"kind":"text","text":"$80 dinner, receipt attached"}]}}}'</pre><button class="key key--sm" type="button" data-copy="cmd-a2a">Copy</button></div>
         </div>
       </div>
-      <p class="honest">This deployment runs the platform code per request on a serverless function, with Gemini 3.5 Flash-Lite on its free tier. When that tier is busy, answers fall back to the offline model and say so. The full version runs on LangGraph Agent Server with Postgres and Redis, with a retention sweeper.</p>
+      <p class="honest">This deployment runs the platform code per request on a serverless function, with Gemini 3.5 Flash-Lite on its free tier. When that tier is busy, answers fall back to the offline model and say so. The full version runs on LangGraph Agent Server with Postgres, Redis and a retention sweeper, and is <a href="https://agentdock-p2i0.onrender.com/ok">live on Render</a> (free plan, so it sleeps when idle).</p>
     </div>
   </section>
 
@@ -167,7 +186,7 @@
           <tr><td>New agent to a live, authenticated MCP and A2A endpoint</td><td class="big num">2.8 s</td></tr>
           <tr><td>Eval cases passing on Gemini 3.5 Flash-Lite</td><td class="big num">18 / 18</td></tr>
           <tr><td>Raw PII released across 40 random chunkings of a stream</td><td class="big num">0</td></tr>
-          <tr><td>Unit tests, no keys and no server</td><td class="big num">104</td></tr>
+          <tr><td>Unit tests, no keys and no server</td><td class="big num">105</td></tr>
         </tbody>
       </table>
     </div>
@@ -237,17 +256,46 @@
     return esc(JSON.stringify(obj, null, 2)).replace(/^(\s*)&quot;([^&]+)&quot;:/gm, '$1<span class="k">"$2"</span>:');
   }
 
-  async function play(deltas) {
-    const el = $("#answer");
-    if (reduce || !deltas.length) return;
-    let acc = "";
-    for (const d of deltas) {
-      for (const word of d.match(/\S+\s*|\s+/g) || []) {
-        acc += word;
-        el.innerHTML = mark(acc) + '<span class="caret"></span>';
-        await new Promise((r) => setTimeout(r, 28));
-      }
+  // Smooth reveal: text arrives in uneven chunks (the redactor holds back a short tail
+  // until it is safe), so a frame loop types out whatever has arrived at a steady pace.
+  const typer = {
+    target: "", shown: 0, raf: 0, done: null,
+    reset() { cancelAnimationFrame(this.raf); this.target = ""; this.shown = 0; this.raf = 0; this.done = null; },
+    push(text) { this.target += text; if (!this.raf) this.raf = requestAnimationFrame(() => this.tick()); },
+    tick() {
+      const left = this.target.length - this.shown;
+      if (reduce) this.shown = this.target.length;
+      else this.shown += Math.max(1, Math.ceil(left / 18));
+      this.shown = Math.min(this.shown, this.target.length);
+      $("#answer").innerHTML = mark(this.target.slice(0, this.shown)) + '<span class="caret"></span>';
+      if (this.shown < this.target.length) this.raf = requestAnimationFrame(() => this.tick());
+      else { this.raf = 0; if (this.done) { const f = this.done; this.done = null; f(); } }
+    },
+    settled() { return new Promise((res) => { if (!this.raf && this.shown >= this.target.length) res(); else this.done = res; }); },
+  };
+
+  function finish(d) {
+    const rec = d.audit[0] || {};
+    setStep(0, "ok", `${d.caller.identity}, ${d.caller.role}${d.caller.via ? ` via ${d.caller.via}` : ""}`);
+    if (rec.denied) {
+      setStep(1, "stop", `${d.caller.role} is not in allowed_roles`);
+      for (const i of [2, 3, 4]) setStep(i, "", "skipped");
+    } else {
+      setStep(1, "ok", `${d.caller.role} allowed`);
+      setStep(2, rec.redacted_in && Object.keys(rec.redacted_in).length ? "hit" : "ok", counts(rec.redacted_in));
+      const tools = (rec.tools || []).length ? `called ${rec.tools.join(", ")}` : "no tools";
+      const subs = d.sub_runs.map((s) => `${s.agent} over A2A as ${s.caller}`).join("; ");
+      setStep(3, "ok", subs ? `${tools}; ${subs}` : tools, `${rec.latency_ms} ms`);
+      setStep(4, rec.redacted_out && Object.keys(rec.redacted_out).length ? "hit" : "ok", counts(rec.redacted_out));
     }
+    setStep(5, "ok", `${rec.hash ? rec.hash.slice(0, 12) : ""}, prev ${rec.prev ? rec.prev.slice(0, 8) : ""}`);
+    $("#audit").innerHTML = jsonHtml(rec);
+    $("#audit-hash").textContent = rec.hash ? `sha256 ${rec.hash.slice(0, 16)}` : "";
+    $("#answer").innerHTML = mark(d.answer);
+    const streamed = d.deltas.length ? `streamed in ${d.deltas.length} redacted chunk${d.deltas.length > 1 ? "s" : ""}` : "not streamed";
+    const fell = d.model === "offline" && d.configured_model !== "offline";
+    const model = d.model === "none" ? "no model call (rules only)" : fell ? "offline fallback (the free model tier was slow)" : d.model;
+    $("#answer-meta").textContent = `${(d.ms / 1000).toFixed(1)} s on the server, ${streamed}, model: ${model}`;
   }
 
   async function send(e) {
@@ -256,38 +304,47 @@
     const message = $("#msg").value.trim();
     if (!message) return;
     state.busy = true; $("#send").disabled = true;
+    typer.reset();
     $("#answer").innerHTML = '<span class="caret"></span>';
-    $("#answer-meta").textContent = "";
     [...$("#trace").children].forEach((li, i) => setStep(i, "", null, ""));
+    const t0 = performance.now();
+    const tick = setInterval(() => { $("#answer-meta").textContent = `Working, ${((performance.now() - t0) / 1000).toFixed(0)} s`; }, 500);
+    $("#answer-meta").textContent = "Working";
+    let done = null;
     try {
-      const r = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json", "x-api-key": person().key }, body: JSON.stringify({ agent: state.agent, message }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      const rec = d.audit[0] || {};
-      setStep(0, "ok", `${d.caller.identity}, ${d.caller.role}${d.caller.via ? ` via ${d.caller.via}` : ""}`);
-      if (rec.denied) {
-        setStep(1, "stop", `${d.caller.role} is not in allowed_roles`);
-        for (const i of [2, 3, 4]) setStep(i, "", "skipped");
-      } else {
-        setStep(1, "ok", `${d.caller.role} allowed`);
-        setStep(2, rec.redacted_in && Object.keys(rec.redacted_in).length ? "hit" : "ok", counts(rec.redacted_in));
-        const tools = (rec.tools || []).length ? `called ${rec.tools.join(", ")}` : "no tools";
-        const subs = d.sub_runs.map((s) => `${s.agent} over A2A as ${s.caller}`).join("; ");
-        setStep(3, "ok", subs ? `${tools}; ${subs}` : tools, `${rec.latency_ms} ms`);
-        setStep(4, rec.redacted_out && Object.keys(rec.redacted_out).length ? "hit" : "ok", counts(rec.redacted_out));
+      const r = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json", "x-api-key": person().key }, body: JSON.stringify({ agent: state.agent, message, stream: true }) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || `HTTP ${r.status}`); }
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done: end } = await reader.read();
+        if (end) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const ev = JSON.parse(line);
+          if (ev.type === "start") {
+            setStep(0, "ok", `${ev.caller.identity}, ${ev.caller.role}${ev.caller.via ? ` via ${ev.caller.via}` : ""}`);
+            setStep(1, "run", "checking allowed_roles"); setStep(3, "run", "waiting for the model");
+          } else if (ev.type === "delta") {
+            setStep(1, "ok", null); setStep(2, "ok", null); setStep(3, "run", "streaming the answer");
+            typer.push(ev.text);
+          } else if (ev.type === "done") { done = ev; }
+          else if (ev.type === "error") { throw new Error(ev.error); }
+        }
       }
-      setStep(5, "ok", `${rec.hash ? rec.hash.slice(0, 12) : ""}, prev ${rec.prev ? rec.prev.slice(0, 8) : ""}`);
-      $("#audit").innerHTML = jsonHtml(rec);
-      $("#audit-hash").textContent = rec.hash ? `sha256 ${rec.hash.slice(0, 16)}` : "";
-      await play(d.deltas);
-      $("#answer").innerHTML = mark(d.answer);
-      const streamed = d.deltas.length ? `${d.deltas.length} redacted stream chunks` : "not streamed";
-      const fell = d.model === "offline" && d.configured_model !== "offline";
-      const model = d.model === "none" ? "no model call (rules only)" : fell ? "offline fallback (the free model tier is busy)" : d.model;
-      $("#answer-meta").textContent = `${d.ms} ms on the server, ${streamed}, model: ${model}`;
+      if (!done) throw new Error("the stream ended early");
+      await typer.settled();
+      finish(done);
     } catch (err) {
+      typer.reset();
       $("#answer").textContent = `Request failed: ${err.message}`;
+      $("#answer-meta").textContent = "";
     } finally {
+      clearInterval(tick);
+      if (!done) $("#answer-meta").textContent = $("#answer-meta").textContent.startsWith("Working") ? "" : $("#answer-meta").textContent;
       state.busy = false; $("#send").disabled = false;
     }
   }

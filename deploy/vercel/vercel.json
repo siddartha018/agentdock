@@ -2,7 +2,7 @@
   "functions": {
     "api/index.py": {
       "includeFiles": "{src/**,agents/**,data/**,config/**,evals/baseline.json}",
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "headers": [
