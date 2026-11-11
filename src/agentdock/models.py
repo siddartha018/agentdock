@@ -132,8 +132,15 @@ def chat_model(offline_policy: OfflinePolicy, *, temperature: float = 0.0) -> An
     name = model_name()
     if name == "offline":
         return ScriptedChatModel(policy=offline_policy)
-    real = _real_model(name, temperature, fallback=os.environ.get("AGENTDOCK_FALLBACK") == "offline")
-    if os.environ.get("AGENTDOCK_FALLBACK") == "offline":
+    fallback = os.environ.get("AGENTDOCK_FALLBACK") == "offline"
+    try:
+        real = _real_model(name, temperature, fallback=fallback)
+    except KeyError as missing:  # the model's API key isn't set
+        if not fallback:
+            raise
+        print(f"[agentdock] {name}: {missing} not set, using the offline model", flush=True)
+        return ScriptedChatModel(policy=offline_policy)
+    if fallback:
         return WithOfflineFallback(real, ScriptedChatModel(policy=offline_policy))
     return real
 

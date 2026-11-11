@@ -1,0 +1,18 @@
+# One-click deploy of the production runtime (Agent Server + Postgres + Redis in one container).
+# https://render.com/deploy?repo=https://github.com/siddartha018/agentdock
+services:
+  - type: web
+    name: agentdock
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/render/Dockerfile
+    dockerContext: .
+    healthCheckPath: /ok
+    autoDeploy: true
+    envVars:
+      - key: LANGSMITH_API_KEY      # required: the self-hosted server checks it at startup
+        sync: false
+      - key: GEMINI_API_KEY         # optional: without it, answers come from the offline model
+        sync: false
+      - key: AGENTDOCK_MODEL
+        value: gemini:gemini-3.5-flash-lite

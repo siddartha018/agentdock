@@ -18,5 +18,7 @@ jobs:
         run: uv run dock check
       - name: Eval gate (offline model, no keys needed)
         run: uv run dock eval
-      - name: langgraph.json is up to date
-        run: git diff --exit-code langgraph.json
+      - name: langgraph.json and the container Dockerfile are up to date
+        run: |
+          scripts/build_container_dockerfile.sh
+          git diff --exit-code langgraph.json deploy/render/Dockerfile

@@ -15,7 +15,6 @@ tail = [
     "    DATABASE_URI=postgres://agentdock@127.0.0.1:5432/agentdock?sslmode=disable \\",
     "    REDIS_URI=redis://127.0.0.1:6379 \\",
     "    N_JOBS_PER_WORKER=8 \\",
-    "    AGENTDOCK_A2A_URL=http://127.0.0.1:7860 \\",
     "    AGENTDOCK_SERVICE_KEY=dk_dev_svc-concierge \\",
     "    AGENTDOCK_RETENTION_KEY=dk_dev_svc-retention \\",
     "    AGENTDOCK_AUDIT_LOG=/tmp/agentdock-audit.jsonl \\",
