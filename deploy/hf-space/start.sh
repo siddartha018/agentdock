@@ -14,4 +14,20 @@ redis-server --daemonize yes --dir /tmp --bind 127.0.0.1 --save "" --appendonly 
 # A2A loopback must hit this server's own port, whatever the host assigns.
 export AGENTDOCK_A2A_URL="${AGENTDOCK_A2A_URL:-http://127.0.0.1:$PORT}"
 echo "[agentdock] postgres + redis up; starting Agent Server on :$PORT"
-exec /storage/entrypoint.sh
+# On a tiny CPU share the server's license check (an HTTPS call to LangSmith made while everything else
+# is still starting) can time out, and the server exits with status 3. Retry that case a few times.
+n=0
+while :; do
+  /storage/entrypoint.sh &
+  child=$!
+  python /deps/agentdock/deploy/hf-space/warm.py &
+  trap 'kill -TERM $child 2>/dev/null' TERM INT
+  wait $child
+  code=$?
+  n=$((n + 1))
+  if [ "$code" -ne 3 ] || [ "$n" -ge 5 ]; then
+    exit "$code"
+  fi
+  echo "[agentdock] server exited during startup (status 3), usually the license check timing out on a slow CPU; retry $n of 4"
+  sleep 5
+done

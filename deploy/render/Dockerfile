@@ -32,6 +32,10 @@ RUN uv pip uninstall --system pip setuptools wheel && rm /usr/bin/uv /usr/bin/uv
 
 WORKDIR /deps/agentdock
 
+# Precompile bytecode: the server runs as uid 1000 and can't write .pyc files into root-owned
+# site-packages, so without this every start recompiles everything (minutes on a 0.1-CPU free plan).
+RUN python -m compileall -q -j 0 $(python -c 'import site; print(site.getsitepackages()[0])') /deps/agentdock/src > /dev/null || true
+
 # Hugging Face runs Spaces as uid 1000
 RUN (id -u 1000 >/dev/null 2>&1 || useradd -m -u 1000 user) && chown -R 1000:1000 /deps
 ENV PORT=7860 \
