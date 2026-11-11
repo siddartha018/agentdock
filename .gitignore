@@ -12,3 +12,27 @@ evals/results/latest.json
 deploy/vercel-project.json
 .hallmark/
 Dockerfile.hf
+
+# --- snapshot hygiene 2026-11-12 ---
+.env*
+!.env.example
+.vercel
+.vercel-bundle
+*.p8
+*.pem
+*.p12
+*.key
+*.mobileprovision
+id_rsa*
+service-account*.json
+credentials*.json
+node_modules/
+venv/
+.next/
+.turbo/
+.cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+*.tsbuildinfo
+*.log
