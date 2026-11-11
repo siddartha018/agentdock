@@ -2,6 +2,14 @@
 # Container entrypoint (Render / any single-container host): Postgres + Redis inside the container, then the
 # LangGraph Agent Server (production runtime). Works as root or as uid 1000.
 set -e
+# Keys pasted into a host's multi-line value box often carry a trailing newline, which makes the
+# HTTP header invalid ("Illegal header value"). Strip whitespace from every key-like variable.
+for v in LANGSMITH_API_KEY GEMINI_API_KEY LANGGRAPH_CLOUD_LICENSE_KEY CLOUDFLARE_AI_TOKEN CLOUDFLARE_ACCOUNT_ID AGENTDOCK_MODEL; do
+  eval "val=\${$v:-}"
+  if [ -n "$val" ]; then
+    export "$v=$(printf '%s' "$val" | tr -d '[:space:]')"
+  fi
+done
 PGBIN=$(ls -d /usr/lib/postgresql/*/bin | tail -1)
 export PATH="$PGBIN:$PATH"
 PGDATA=/tmp/pgdata
