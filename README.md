@@ -146,7 +146,7 @@ All data is fake.
 
 ## Serverless edition (Vercel)
 
-`deploy/vercel/` is a FastAPI app that imports this package and runs the same path per request (`auth.resolve` → platform wrapper → audit) on the offline model, with small MCP (`/mcp`) and A2A (`/a2a/<agent>`) endpoints and a live eval-gate button. The Agent Server needs a long-running process, so this edition has no retention sweeper or real-model calls. Deploy with `scripts/deploy_vercel.sh` (it builds a plain-copy bundle, no git metadata).
+`deploy/vercel/` is a FastAPI app that imports this package and runs the same path per request (`auth.resolve` → platform wrapper → audit) on the offline model, with small MCP (`/mcp`) and A2A (`/a2a/<agent>`) endpoints and a live eval-gate button. The Agent Server needs a long-running process, so this edition has no retention sweeper or real-model calls. Deploy with `scripts/deploy_vercel.sh` (it builds a plain-copy bundle, no git metadata). The root `vercel.json` turns off Vercel's Git builds: the repo root isn't the web app, so pushes would only produce failed deployments.
 
 ## Layout
 
